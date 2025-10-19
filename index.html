@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Nigerian Forces Exam Portal</title>
+  <style>
+    * { box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+    body {
+      margin: 0;
+      background-color: #0b1c0b;
+      color: #f5f5dc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      transition: background 0.5s, color 0.5s;
+      padding: 20px;
+    }
+    .container {
+      background: rgba(0,20,0,0.85);
+      border: 2px solid #556b2f;
+      border-radius: 12px;
+      padding: 24px;
+      width: 100%;
+      max-width: 900px;
+      box-shadow: 0 0 20px rgba(255,215,0,0.15);
+    }
+    h1,h2,h3 { color:#ffd700; margin:4px 0 12px; }
+    input[type="text"], input[type="password"] {
+      width: 96%; padding:10px; margin:8px 0; border-radius:6px;
+      background:#112111; border:1px solid #556b2f; color:#fff;
+    }
+    input[type="checkbox"] { transform:scale(1.15); margin-right:6px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    button {
+      background:#006400; color:#fff; border:none; padding:10px 16px;
+      border-radius:6px; cursor:pointer; font-weight:700; margin:6px 4px;
+    }
+    button:hover { transform:scale(1.03); background:#228b22; }
+    .hidden { display:none; }
+    .toggle-dark {
+      background:#333; color:#ffd700; border:1px solid #ffd700;
+      position:fixed; top:20px; right:20px; padding:8px; cursor:pointer;
+      border-radius:8px;
+    }
+    .quiz { text-align:left; margin-top:10px; max-height:60vh; overflow:auto; padding-right:8px;}
+    .timer { font-size:16px; font-weight:700; color:#ffd700; margin-bottom:8px; }
+    .question { margin-bottom:12px; padding:8px; border-radius:8px; background:rgba(255,255,255,0.02);}
+    .option { display:block; margin:6px 0; }
+    .result { margin-top:12px; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px;}
+    label { color:#ffd700; }
+    .scores { margin-top:12px; text-align:left; }
+    .small { font-size:13px; color:#ddd; }
+    @media (max-width:600px) {
+      .container { padding:16px; }
+      button { padding:8px 12px; }
+    }
+  </style>
+</head>
+<body>
+  <button class="toggle-dark" id="toggleDarkBtn">🌙 Mode</button>
+
+  <!-- Register -->
+  <div class="container" id="registerPage">
+    <h1>🪖 Nigerian Forces Exam Portal</h1>
+    <h3>Create Account</h3>
+    <input id="regUsername" type="text" placeholder="Choose username" />
+    <input id="regPassword" type="password" placeholder="Choose password" />
+    <p id="regMsg" class="small"></p>
+    <div class="row">
+      <button id="btnRegister">Register</button>
+      <button id="btnToLogin">Have an account? Login</button>
+    </div>
+  </div>
+
+  <!-- Login -->
+  <div class="container hidden" id="loginPage">
+    <h1>🪖 Login</h1>
+    <input id="logUsername" type="text" placeholder="Username" />
+    <input id="logPassword" type="password" placeholder="Password" />
+    <div style="margin:6px 0;">
+      <label><input id="rememberMe" type="checkbox"> Remember Me</label>
+    </div>
+    <p id="logMsg" class="small"></p>
+    <div class="row">
+      <button id="btnLogin">Login</button>
+      <button id="btnToRegister">Create Account</button>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="container hidden" id="dashboard">
+    <h2>Welcome, <span id="userDisplay"></span></h2>
+    <div id="quizMenu">
+      <h3>Select Category</h3>
+      <div class="row">
+        <button class="catBtn" data-cat="army">Nigerian Army</button>
+        <button class="catBtn" data-cat="airforce">Nigerian Air Force</button>
+        <button class="catBtn" data-cat="navy">Nigerian Navy</button>
+        <button class="catBtn" data-cat="customs">Nigerian Customs</button>
+        <button id="btnLogout">Logout</button>
+      </div>
+
+      <div class="scores" id="scoresDisplay"></div>
+    </div>
+
+    <div id="quizArea" class="hidden"></div>
+  </div>
+
+  <script>
+    /* ---------------------------
+       Element references
+       --------------------------- */
+    const registerPage = document.getElementById('registerPage');
+    const loginPage = document.getElementById('loginPage');
+    const dashboard = document.getElementById('dashboard');
+    const quizMenu = document.getElementById('quizMenu');
+    const quizArea = document.getElementById('quizArea');
+    const regUsername = document.getElementById('regUsername');
+    const regPassword = document.getElementById('regPassword');
+    const regMsg = document.getElementById('regMsg');
+    const logUsername = document.getElementById('logUsername');
+    const logPassword = document.getElementById('logPassword');
+    const logMsg = document.getElementById('logMsg');
+    const rememberMe = document.getElementById('rememberMe');
+    const userDisplay = document.getElementById('userDisplay');
+    const scoresDisplay = document.getElementById('scoresDisplay');
+    const toggleDarkBtn = document.getElementById('toggleDarkBtn');
+
+    // Buttons
+    document.getElementById('btnRegister').addEventListener('click', register);
+    document.getElementById('btnToLogin').addEventListener('click', showLogin);
+    document.getElementById('btnToRegister').addEventListener('click', showRegister);
+    document.getElementById('btnLogin').addEventListener('click', login);
+    document.getElementById('btnLogout').addEventListener('click', logout);
+    toggleDarkBtn.addEventListener('click', toggleDarkMode);
+    document.querySelectorAll('.catBtn').forEach(b => b.addEventListener('click', () => startQuiz(b.dataset.cat)));
+
+    /* ---------------------------
+       Utility: shuffle copy of an array
+       --------------------------- */
+    function shuffleArrayCopy(arr) {
+      const copy = arr.slice();
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    /* ---------------------------
+       Authentication
+       --------------------------- */
+    function showLogin() {
+      registerPage.classList.add('hidden');
+      loginPage.classList.remove('hidden');
+    }
+    function showRegister() {
+      loginPage.classList.add('hidden');
+      registerPage.classList.remove('hidden');
+    }
+
+    function register() {
+      const user = regUsername.value.trim();
+      const pass = regPassword.value.trim();
+      regMsg.style.color = 'red';
+      if (!user || !pass) { regMsg.textContent = 'Fill both fields.'; return; }
+      if (localStorage.getItem(`user_${user}`)) { regMsg.textContent = 'Username exists.'; return; }
+      const payload = { password: pass, scores: {} };
+      localStorage.setItem(`user_${user}`, JSON.stringify(payload));
+      regMsg.style.color = 'lightgreen';
+      regMsg.textContent = 'Account created — you can log in.';
+      regUsername.value=''; regPassword.value='';
+    }
+
+    function login() {
+      const user = logUsername.value.trim();
+      const pass = logPassword.value.trim();
+      logMsg.style.color = 'red';
+      if (!user || !pass) { logMsg.textContent = 'Fill both fields.'; return; }
+      const raw = localStorage.getItem(`user_${user}`);
+      if (!raw) { logMsg.textContent = 'User not found.'; return; }
+      const data = JSON.parse(raw);
+      if (data.password !== pass) { logMsg.textContent = 'Incorrect password.'; return; }
+
+      // success: set currentUser and create shuffled session questions
+      localStorage.setItem('currentUser', user);
+      if (rememberMe.checked) {
+        sessionStorage.setItem('rememberUser', user);
+      } else {
+        sessionStorage.removeItem('rememberUser');
+      }
+
+      // create shuffledQuestions for this session (so each login gets different order)
+      createShuffledQuestionsForSession();
+
+      showDashboardFor(user);
+    }
+
+    function logout() {
+      localStorage.removeItem('currentUser');
+      sessionStorage.removeItem('rememberUser');
+      sessionStorage.removeItem('shuffledQuestions'); // clear session shuffle on logout
+      dashboard.classList.add('hidden');
+      loginPage.classList.remove('hidden');
+    }
+
+    /* ---------------------------
+       Dark mode
+       --------------------------- */
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+    }
+
+    /* ---------------------------
+       Questions (32 per category) - original banks (not modified)
+       --------------------------- */
+    const questions = {
+      army: [
+        { q: "When was the Nigerian Army formally established in its modern form?", o: ["1914", "1956", "1960", "1970"], a: "1956" },
+        { q: "What is the motto of the Nigerian Army?", o: ["Victory is from God alone", "Unity and Strength", "Duty and Service", "Peace and Honour"], a: "Victory is from God alone" },
+        { q: "Where is the Nigerian Defence Academy (NDA) located?", o: ["Kaduna", "Abuja", "Lagos", "Kano"], a: "Kaduna" },
+        { q: "Who is responsible for operational command of the Army?", o: ["Chief of Army Staff", "Minister of Defence", "President", "Chief of Defence Staff"], a: "Chief of Army Staff" },
+        { q: "Which type of unit is the smallest tactical unit in the army?", o: ["Division", "Platoon", "Brigade", "Battalion"], a: "Platoon" },
+        { q: "Which camouflage color is traditionally associated with the Nigerian Army?", o: ["Khaki", "Blue", "White", "Gray"], a: "Khaki" },
+        { q: "Which training school focuses on infantry tactics?", o: ["Depot Division", "Infantry School", "Armoured School", "Signal School"], a: "Infantry School" },
+        { q: "Which rank is above Lieutenant Colonel?", o: ["Colonel", "Major", "Captain", "Brigadier"], a: "Colonel" },
+        { q: "Which corps is responsible for military engineering?", o: ["Engineer Corps", "Finance Corps", "Medical Corps", "Intelligence Corps"], a: "Engineer Corps" },
+        { q: "Which parade is commonly held to mark army anniversaries?", o: ["Pass-Out Parade", "Change of Command", "Founders Day Parade", "Remembrance Parade"], a: "Pass-Out Parade" },
+        { q: "What is the primary role of the Army Signals?", o: ["Communications", "Logistics", "Medical Support", "Armour"], a: "Communications" },
+        { q: "Which vehicle is commonly used for troop transport?", o: ["Armoured Personnel Carrier (APC)", "Fighter Jet", "Destroyer", "Helicopter"], a: "Armoured Personnel Carrier (APC)" },
+        { q: "Which doctrine emphasizes combined arms operations?", o: ["Combined Arms Doctrine", "Strategic Bombing", "Maritime Doctrine", "Air Supremacy"], a: "Combined Arms Doctrine" },
+        { q: "What is the role of the Army Intelligence Corps?", o: ["Gather information and analysis", "Provide medical care", "Manage finances", "Train cadets"], a: "Gather information and analysis" },
+        { q: "Which unit specializes in armoured warfare?", o: ["Armoured Corps", "Signal Corps", "Engineer Corps", "Infantry"], a: "Armoured Corps" },
+        { q: "What is 'Rules of Engagement' primarily about?", o: ["Guidelines for soldiers on use of force", "Training schedules", "Pay structure", "Uniform codes"], a: "Guidelines for soldiers on use of force" },
+        { q: "Which formation is larger: Brigade or Division?", o: ["Division", "Brigade", "Battalion", "Company"], a: "Division" },
+        { q: "Which organ supplies food and materiel to troops?", o: ["Logistics Corps", "Medical Corps", "Intelligence Corps", "Signal Corps"], a: "Logistics Corps" },
+        { q: "Which medal is awarded for bravery in the Nigerian Army?", o: ["Force Service Star", "Medal of Honour", "Gallantry Medal", "Distinguished Service Star"], a: "Gallantry Medal" },
+        { q: "Which branch handles military medical services?", o: ["Medical Corps", "Logistics", "Intelligence", "Signals"], a: "Medical Corps" },
+        { q: "What is the main purpose of reconnaissance?", o: ["Gather information about the enemy", "Supply troops", "Train new recruits", "Fix vehicles"], a: "Gather information about the enemy" },
+        { q: "Which exercise improves interoperability with other services?", o: ["Joint Exercise", "Solo Drill", "Parade", "Recruiting Drive"], a: "Joint Exercise" },
+        { q: "Which rank is the lowest commissioned officer rank?", o: ["Second Lieutenant", "Captain", "Major", "Lieutenant Colonel"], a: "Second Lieutenant" },
+        { q: "What is a 'Company' in army terms?", o: ["A unit of soldiers (~100-200)", "A contractor", "A training ground", "A single vehicle"], a: "A unit of soldiers (~100-200)" },
+        { q: "Which weapon is standard issue for infantry soldiers?", o: ["Assault rifle", "Torpedo", "Canon", "Missile"], a: "Assault rifle" },
+        { q: "Which role does the Provost Corps perform?", o: ["Military policing and discipline", "Medical treatment", "Engineering works", "Signal maintenance"], a: "Military policing and discipline" },
+        { q: "Which body sets strategic defense policy in Nigeria?", o: ["National Defence Council", "Army HQ only", "Local Government", "Ministry of Finance"], a: "National Defence Council" },
+        { q: "Which concept focuses on civil-military cooperation?", o: ["CIMIC (Civil-Military Cooperation)", "Naval Doctrine", "Airspace Control", "Maritime Law"], a: "CIMIC (Civil-Military Cooperation)" },
+        { q: "Which training period is longest for officers?", o: ["Commission training at NDA", "Basic weapons training", "Short refresher course", "Map reading day"], a: "Commission training at NDA" },
+        { q: "Which item is part of individual soldiers' protective gear?", o: ["Helmet", "Anchor", "Torpedo", "Radar"], a: "Helmet" },
+        { q: "Which activity is core to peacekeeping operations?", o: ["Protect civilians and maintain peace", "Naval blockades", "Air combat", "Mining operations"], a: "Protect civilians and maintain peace" }
+      ],
+
+      airforce: [
+        { q: "When was the Nigerian Air Force (NAF) established?", o: ["1956", "1964", "1970", "1980"], a: "1964" },
+        { q: "What is the motto of the NAF?", o: ["Willing, Able, Ready", "Aim High", "Guard the Sky", "Peace and Honour"], a: "Willing, Able, Ready" },
+        { q: "Where is the Headquarters of the NAF located?", o: ["Abuja", "Lagos", "Kaduna", "Jos"], a: "Abuja" },
+        { q: "Which aircraft type is primarily used for advanced training?", o: ["Alpha Jet", "Helicopter", "F-16", "Transport Plane"], a: "Alpha Jet" },
+        { q: "What is the main role of a transport squadron?", o: ["Move troops and materiel", "Air combat", "Ship escort", "Medical support"], a: "Move troops and materiel" },
+        { q: "Which personnel monitors radar and air traffic?", o: ["Air Traffic Controllers", "Engineers", "Medics", "Infantry"], a: "Air Traffic Controllers" },
+        { q: "What is sortie?", o: ["A single operational flight by one aircraft", "A parachute", "A runway", "A maintenance schedule"], a: "A single operational flight by one aircraft" },
+        { q: "Which unit is responsible for aircraft maintenance?", o: ["Engineering/Logistics", "Medical Wing", "Intelligence", "Administration"], a: "Engineering/Logistics" },
+        { q: "Which rank leads a squadron?", o: ["Wing Commander", "Sergeant", "Lieutenant", "Corporal"], a: "Wing Commander" },
+        { q: "What is the role of aerial reconnaissance?", o: ["Gather intelligence from the air", "Provide food", "Repair ships", "Train cadets"], a: "Gather intelligence from the air" },
+        { q: "Which system helps detect incoming aircraft?", o: ["Radar", "Sonar", "Compass", "Periscope"], a: "Radar" },
+        { q: "Which aircraft role is 'CAS'?", o: ["Close Air Support", "Cargo And Supply", "Carrier Air Service", "Covert Aerial Surveillance"], a: "Close Air Support" },
+        { q: "Which environmental factor is critical for flight ops?", o: ["Weather", "Soil type", "Local cuisine", "Currency rate"], a: "Weather" },
+        { q: "Which instrument measures altitude?", o: ["Altimeter", "Thermometer", "Speedometer", "Barometer"], a: "Altimeter" },
+        { q: "What is 'No-Fly Zone'?", o: ["Area where aircraft are restricted", "A safe landing strip", "A training method", "A radar type"], a: "Area where aircraft are restricted" },
+        { q: "Which service conducts air-to-air refuelling?", o: ["Air Force tanker units", "Navy", "Customs", "Army"], a: "Air Force tanker units" },
+        { q: "Which document authorizes flight missions?", o: ["Flight orders", "Pay slip", "Recruitment letter", "Passport"], a: "Flight orders" },
+        { q: "Which training is essential for pilots?", o: ["Flight hours and simulator training", "Typing skills", "Sailing", "Cooking"], a: "Flight hours and simulator training" },
+        { q: "Which device assists night vision for pilots?", o: ["NVG (Night Vision Goggles)", "Periscope", "Loudhailer", "Sonar"], a: "NVG (Night Vision Goggles)" },
+        { q: "What is an aerobatic display primarily for?", o: ["Demonstration and morale", "Cargo transport", "Reconnaissance", "Maintenance"], a: "Demonstration and morale" },
+        { q: "Which runway feature is essential for safe landing?", o: ["Runway lights", "Radar dome", "Anchors", "Torpedo bay"], a: "Runway lights" },
+        { q: "Which crew watches and maintains aircraft systems in-flight?", o: ["Flight Engineers", "Medics", "Infantry", "Customs Inspectors"], a: "Flight Engineers" },
+        { q: "What is 'airworthiness'?", o: ["Suitability of aircraft to fly safely", "Theft insurance", "A weather term", "A radio call sign"], a: "Suitability of aircraft to fly safely" },
+        { q: "Which role does the Search and Rescue (SAR) unit perform?", o: ["Rescue downed aircrew/civilians", "Provide catering", "Train medics", "Issue passports"], a: "Rescue downed aircrew/civilians" },
+        { q: "Which action is part of pre-flight checks?", o: ["Inspect control surfaces", "Serve meals", "Wash floors", "Collect taxes"], a: "Inspect control surfaces" },
+        { q: "What is the main threat to aircraft engines?", o: ["Bird strikes", "Paperwork", "Maritime traffic", "Traffic lights"], a: "Bird strikes" },
+        { q: "Which type of aircraft provides airborne early warning?", o: ["AEW aircraft (with radar)", "Submarine", "Destroyer", "Carrier"], a: "AEW aircraft (with radar)" },
+        { q: "Which instrument indicates airspeed?", o: ["Airspeed Indicator", "Altimeter", "Compass", "Clock"], a: "Airspeed Indicator" },
+        { q: "Which procedure handles aircraft emergencies?", o: ["Emergency checklists", "Recruitment", "Budget planning", "Training schedule"], a: "Emergency checklists" },
+        { q: "Which international code governs civil aviation safety standards?", o: ["ICAO", "NATO", "WHO", "IMO"], a: "ICAO" },
+        { q: "Which personnel is trained for parachute operations?", o: ["Paratroopers / Airborne units", "Sailors", "Customs officers", "Clerks"], a: "Paratroopers / Airborne units" }
+      ],
+
+      navy: [
+        { q: "When was the modern Nigerian Navy founded in professional form?", o: ["1956", "1961", "1964", "1970"], a: "1956" },
+        { q: "Which color is associated with most navy dress uniforms?", o: ["White", "Green", "Khaki", "Brown"], a: "White" },
+        { q: "Where is the Nigerian Navy Headquarters?", o: ["Abuja", "Lagos", "Port Harcourt", "Calabar"], a: "Abuja" },
+        { q: "What does 'ASW' stand for in naval operations?", o: ["Anti-Submarine Warfare", "Air-Sea Warfare", "Auxiliary Ship Watch", "Automatic Ship Weapon"], a: "Anti-Submarine Warfare" },
+        { q: "What is the primary role of a Frigate?", o: ["Escort and patrol", "Medical aid", "Air defense only", "Parade duties"], a: "Escort and patrol" },
+        { q: "Which unit handles naval engineering and repairs?", o: ["Marine Engineering", "Medical Corps", "Intelligence", "Signal Corps"], a: "Marine Engineering" },
+        { q: "Which structure is used to moor ships?", o: ["Quay/Pier", "Runway", "Hangar", "Dockyard"], a: "Quay/Pier" },
+        { q: "Which instrument helps navigation at sea?", o: ["Compass", "Altimeter", "Airspeed Indicator", "Radar"], a: "Compass" },
+        { q: "Which ship type is for amphibious operations?", o: ["Landing Ship/Platform", "Submarine", "Tanker", "Corvette"], a: "Landing Ship/Platform" },
+        { q: "Which practice maintains seamanship skills?", o: ["Drills and sea time", "Only classroom lectures", "Never sailing", "Reading novels"], a: "Drills and sea time" },
+        { q: "What is the purpose of a naval blockade?", o: ["Prevent enemy shipping access", "Provide supplies", "Train new recruits", "Repair ships"], a: "Prevent enemy shipping access" },
+        { q: "Which device detects other ships and land features?", o: ["Radar", "Sonar", "Altimeter", "Airspeed Indicator"], a: "Radar" },
+        { q: "Which crew is responsible for damage control onboard?", o: ["Damage Control Team", "Catering Staff", "Customs Officers", "Intelligence Analysts"], a: "Damage Control Team" },
+        { q: "Which rank commands a naval vessel?", o: ["Captain", "Lieutenant", "Sergeant", "Major"], a: "Captain" },
+        { q: "Which international law governs conduct at sea?", o: ["UNCLOS", "ICAO", "NATO Charter", "WHO Guidelines"], a: "UNCLOS" },
+        { q: "What is a 'fast attack craft' used for?", o: ["Quick strikes and patrol", "Hospital duties", "Training only", "Air traffic control"], a: "Quick strikes and patrol" },
+        { q: "Which safety equipment is mandatory on ships?", o: ["Life jackets and lifeboats", "Parachutes", "Helmets", "Railway signals"], a: "Life jackets and lifeboats" },
+        { q: "What is 'sonar' used for?", o: ["Detect underwater objects", "Measure wind", "Cook food", "Measure airspeed"], a: "Detect underwater objects" },
+        { q: "Which role does the Navy Reserve perform?", o: ["Supplement active forces when needed", "Only ceremonial duties", "Civilian police", "Customs enforcement"], a: "Supplement active forces when needed" },
+        { q: "Which berth type is used for deep draft vessels?", o: ["Deep-water berths", "Shallow berths", "Dry docks", "Hangars"], a: "Deep-water berths" },
+        { q: "Which navigation aid is used near coasts?", o: ["Lighthouses and buoys", "Radar domes", "Air strips", "Torpedo nets"], a: "Lighthouses and buoys" },
+        { q: "Which material prevents hull corrosion?", o: ["Anti-fouling paint", "Paper", "Cotton", "Wood chips"], a: "Anti-fouling paint" },
+        { q: "What is the role of naval intelligence?", o: ["Provide maritime situational awareness", "Serve meals", "Issue passports", "Repair aircraft"], a: "Provide maritime situational awareness" },
+        { q: "Which ship conducts mine countermeasures?", o: ["Minehunter/Minesweeper", "Frigate", "Carrier", "Tanker"], a: "Minehunter/Minesweeper" },
+        { q: "Which procedure secures a ship to a pier?", o: ["Mooring", "Launch", "Taxiing", "Anchoring only at sea"], a: "Mooring" },
+        { q: "Which system provides power for shipboard electronics?", o: ["Shipboard generators", "Windmills", "Solar only", "Submarine reactors only"], a: "Shipboard generators" },
+        { q: "What is a 'convoy'?", o: ["Group of ships traveling together for protection", "A single merchant ship", "A training exercise on land", "Aircraft formation"], a: "Group of ships traveling together for protection" },
+        { q: "Which measure reduces piracy risk?", o: ["Use of armed escort and watchkeeping", "Closing hatches", "Increasing speed only", "Singing on deck"], a: "Use of armed escort and watchkeeping" },
+        { q: "Which platform supports helicopter operations on ships?", o: ["Flight deck", "Hangar bay", "Anchor", "Torpedo tube"], a: "Flight deck" }
+      ],
+
+      customs: [
+        { q: "When was the earliest form of customs service in Nigeria established historically?", o: ["1891", "1900", "1914", "1960"], a: "1891" },
+        { q: "Which ministry does Nigerian Customs traditionally operate under?", o: ["Ministry of Finance", "Ministry of Defence", "Ministry of Transport", "Ministry of Interior"], a: "Ministry of Finance" },
+        { q: "Who is the head of the Nigerian Customs Service?", o: ["Comptroller-General", "Inspector-General", "Commissioner", "Commandant"], a: "Comptroller-General" },
+        { q: "What is the primary role of customs?", o: ["Collect duties and prevent smuggling", "Provide medical care", "Command troops", "Operate aircraft"], a: "Collect duties and prevent smuggling" },
+        { q: "Which document declares cargo contents to customs?", o: ["Customs declaration", "Passport", "Pay slip", "Ticket"], a: "Customs declaration" },
+        { q: "What is 'tariff'?", o: ["Tax on imported goods", "A shipping container", "A passport stamp", "A customs officer"], a: "Tax on imported goods" },
+        { q: "Which is a common customs control point?", o: ["Seaport, Airport, Land border", "Only embassies", "Only schools", "Only banks"], a: "Seaport, Airport, Land border" },
+        { q: "What is 'bonded warehouse' used for?", o: ["Store imported goods pending duty payment", "House passengers", "Train soldiers", "Keep passports"], a: "Store imported goods pending duty payment" },
+        { q: "What is 'smuggling'?", o: ["Illegal movement of goods to avoid controls", "Legal import", "Customs paperwork", "Port charge"], a: "Illegal movement of goods to avoid controls" },
+        { q: "Which sensor helps customs inspect containers non-invasively?", o: ["X-ray scanning", "Altimeter", "Airspeed indicator", "Tachometer"], a: "X-ray scanning" },
+        { q: "Which term means exemption from duty?", o: ["Duty free", "Taxable", "Bonded", "Seized"], a: "Duty free" },
+        { q: "Which item is often restricted from import?", o: ["Illegal drugs", "Toothpaste", "Paper", "Shoelaces"], a: "Illegal drugs" },
+        { q: "Which document proves origin of goods?", o: ["Certificate of Origin", "Ticket", "Passport", "Invoice only"], a: "Certificate of Origin" },
+        { q: "Which process enforces trade rules and quotas?", o: ["Customs inspections and controls", "Airforce patrols", "Sail training", "Medical checks"], a: "Customs inspections and controls" },
+        { q: "What is 'transit' in customs?", o: ["Movement of goods through a country without importation", "Permanent import", "Export only", "Storage in shop"], a: "Movement of goods through a country without importation" },
+        { q: "Which role is responsible for revenue collection at ports?", o: ["Customs officers", "Pilots", "Medics", "Engineers"], a: "Customs officers" },
+        { q: "What is 'valuation' for customs purposes?", o: ["Determining the monetary value of goods", "Measuring weight only", "Counting containers", "Issuing visas"], a: "Determining the monetary value of goods" },
+        { q: "Which international agency supports customs capacity building?", o: ["WCO (World Customs Organization)", "WHO", "ICAO", "IMO"], a: "WCO (World Customs Organization)" },
+        { q: "What is 'manifest' in shipping?", o: ["List of cargo on a ship/flight", "Passport", "Crew roster", "Insurance policy"], a: "List of cargo on a ship/flight" },
+        { q: "Which measure helps combat counterfeit imports?", o: ["Intelligence-led enforcement and inspections", "Ignore them", "Only paperwork", "Open borders"], a: "Intelligence-led enforcement and inspections" },
+        { q: "What does 'SAD' stand for in customs in some areas?", o: ["Single Administrative Document", "Ship Arrival Date", "Special Audit Division", "Security and Defense"], a: "Single Administrative Document" },
+        { q: "What is the aim of 'risk profiling' in customs?", o: ["Target high-risk consignments for inspection", "Open all consignments", "Close borders", "Hire more clerks"], a: "Target high-risk consignments for inspection" },
+        { q: "Which type of goods often requires sanitary inspection?", o: ["Food and agricultural products", "Books", "Clothes", "Batteries"], a: "Food and agricultural products" },
+        { q: "Which is a sanction customs may apply?", o: ["Fines and seizure of goods", "Free tickets", "Promotion", "Diplomatic status"], a: "Fines and seizure of goods" },
+        { q: "Which term means legally permitted temporary import?", o: ["Temporary Admission", "Permanent Import", "Transit", "Seizure"], a: "Temporary Admission" },
+        { q: "Which database helps customs check for stolen goods?", o: ["Interpol and national databases", "Weather forecast", "Medical records", "School registry"], a: "Interpol and national databases" },
+        { q: "Which activity improves trade facilitation?", o: ["Simplified clearance procedures and automation", "More paperwork", "Longer inspections", "Closed ports"], a: "Simplified clearance procedures and automation" },
+        { q: "Which instrument is used to clamp and secure seized contraband?", o: ["Evidence tags and secure storage", "Radar", "Runway lights", "Airspeed indicator"], a: "Evidence tags and secure storage" },
+        { q: "Which unit handles smuggling intelligence?", o: ["Anti-smuggling/Intelligence unit", "Medical wing", "Public relations", "Finance only"], a: "Anti-smuggling/Intelligence unit" },
+        { q: "Which legal document grants customs authority to inspect?", o: ["Customs Act / relevant law", "Decorative plaque", "Passport", "Invoice"], a: "Customs Act / relevant law" }
+      ]
+    };
+
+    /* ---------------------------
+       Create shuffledQuestions copy and store in sessionStorage
+       (called on each login so questions order changes each session)
+       --------------------------- */
+    function createShuffledQuestionsForSession() {
+      const shuffled = {};
+      Object.keys(questions).forEach(cat => {
+        shuffled[cat] = shuffleArrayCopy(questions[cat]);
+      });
+      sessionStorage.setItem('shuffledQuestions', JSON.stringify(shuffled));
+    }
+
+    /* ---------------------------
+       Quiz engine & timer (uses shuffledQuestions if present)
+       --------------------------- */
+    let currentCategory = null;
+    let timerInterval = null;
+    let timeLeft = 1800; // seconds
+
+    function startQuiz(category) {
+      currentCategory = category;
+      quizMenu.classList.add('hidden');
+      quizArea.classList.remove('hidden');
+
+      // pick source: session shuffled copy if available, otherwise original bank
+      const shuffledRaw = sessionStorage.getItem('shuffledQuestions');
+      const set = shuffledRaw ? JSON.parse(shuffledRaw)[category] : questions[category];
+
+      if (!set || !Array.isArray(set)) {
+        quizArea.innerHTML = '<p class="small">No questions available for this category.</p>';
+        return;
+      }
+
+      // Build quiz HTML (all 32 questions shown in shuffled order)
+      let html = `<h3>${category.toUpperCase()} EXAM</h3>
+                  <div class="timer">Time Left: <span id="timeDisplay">--:--</span></div>
+                  <form id="quizForm" class="quiz">`;
+
+      set.forEach((item, i) => {
+        // ensure each question has 4 options; they are from the bank
+        html += `<div class="question"><p>${i+1}. ${item.q}</p>`;
+        item.o.forEach((opt) => {
+          // use a name q{index} so answers map to the shuffled order
+          html += `<label class="option"><input name="q${i}" type="radio" value="${opt}"> ${opt}</label>`;
+        });
+        html += `</div>`;
+      });
+
+      html += `<div style="text-align:center; margin-top:8px;">
+                <button type="button" id="submitBtn">Submit</button>
+                <button type="button" id="cancelBtn">Cancel</button>
+               </div></form>`;
+
+      quizArea.innerHTML = html;
+
+      document.getElementById('submitBtn').addEventListener('click', () => submitQuiz(false));
+      document.getElementById('cancelBtn').addEventListener('click', () => { clearInterval(timerInterval); backToMenu(); });
+
+      // store the set being used for grading (so we know correct answers order)
+      sessionStorage.setItem('currentQuizSet', JSON.stringify(set));
+
+      startTimer();
+    }
+
+    function startTimer() {
+      timeLeft = 1020;
+      updateTimerDisplay();
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        updateTimerDisplay();
+        if (timeLeft <= 0) {
+          clearInterval(timerInterval);
+          submitQuiz(true);
+        }
+      }, 1000);
+    }
+
+    function updateTimerDisplay() {
+      const timeDisplay = document.getElementById('timeDisplay');
+      if (!timeDisplay) return;
+      const m = Math.floor(timeLeft / 60);
+      const s = timeLeft % 60;
+      timeDisplay.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function submitQuiz(auto = false) {
+      clearInterval(timerInterval);
+      const user = localStorage.getItem('currentUser');
+      if (!user) {
+        alert('No current user session found.');
+        backToMenu();
+        return;
+      }
+
+      const setRaw = sessionStorage.getItem('currentQuizSet');
+      if (!setRaw) {
+        alert('Quiz data missing. Please start the quiz again.');
+        backToMenu();
+        return;
+      }
+      const set = JSON.parse(setRaw); // this is the shuffled list used in this quiz
+
+      const form = document.getElementById('quizForm');
+      const data = new FormData(form);
+      let score = 0;
+      let reviewHtml = '';
+
+      set.forEach((q, i) => {
+        const ans = data.get(`q${i}`);
+        if (ans === q.a) {
+          score++;
+          reviewHtml += `<p style="color:lightgreen;">${i+1}. ${q.q} ✅</p>`;
+        } else {
+          reviewHtml += `<p style="color:#ff8080;">${i+1}. ${q.q} ❌ (Correct: ${q.a})</p>`;
+        }
+      });
+
+      const percent = ((score / set.length) * 100).toFixed(1);
+
+      // save to user's saved scores
+      const raw = localStorage.getItem(`user_${user}`);
+      if (raw) {
+        const payload = JSON.parse(raw);
+        payload.scores = payload.scores || {};
+        payload.scores[currentCategory] = percent;
+        payload.scores[`${currentCategory}_lastTaken`] = new Date().toISOString();
+        localStorage.setItem(`user_${user}`, JSON.stringify(payload));
+      }
+
+      // show result & review
+      quizArea.innerHTML = `<h3>Exam Finished</h3>
+        <p class="small">${auto ? '(Time up!)' : ''}</p>
+        <h4>Your Score: ${score}/${set.length} — ${percent}%</h4>
+        <div class="result">${reviewHtml}</div>
+        <div style="text-align:center; margin-top:12px;">
+          <button id="backMenuBtn">Back to Menu</button>
+        </div>`;
+
+      document.getElementById('backMenuBtn').addEventListener('click', backToMenu);
+      showScoresFor(user);
+      // clear currentQuizSet after finishing
+      sessionStorage.removeItem('currentQuizSet');
+    }
+
+    function backToMenu() {
+      quizArea.classList.add('hidden');
+      quizMenu.classList.remove('hidden');
+    }
+
+    /* ---------------------------
+       Dashboard: show scores
+       --------------------------- */
+    function showDashboardFor(user) {
+      registerPage.classList.add('hidden');
+      loginPage.classList.add('hidden');
+      dashboard.classList.remove('hidden');
+      userDisplay.textContent = user;
+      showScoresFor(user);
+    }
+
+    function showScoresFor(user) {
+      const raw = localStorage.getItem(`user_${user}`);
+      let html = '<h4>My Scores</h4>';
+      if (!raw) {
+        html += '<p class="small">No score data.</p>';
+        scoresDisplay.innerHTML = html;
+        return;
+      }
+      const payload = JSON.parse(raw);
+      const s = payload.scores || {};
+      ['army','airforce','navy','customs'].forEach(cat => {
+        const v = s[cat] ? `${s[cat]}%` : 'Not taken';
+        const ts = s[`${cat}_lastTaken`] ? ` — ${new Date(s[`${cat}_lastTaken`]).toLocaleString()}` : '';
+        html += `<p><strong>${cat.toUpperCase()}:</strong> ${v} <span class="small">${ts}</span></p>`;
+      });
+      scoresDisplay.innerHTML = html;
+    }
+
+    /* ---------------------------
+       Auto-load session on page open
+       --------------------------- */
+    window.addEventListener('load', () => {
+      const rememberUser = sessionStorage.getItem('rememberUser');
+      const currentUser = localStorage.getItem('currentUser');
+
+      if (rememberUser) {
+        // if remember exists, re-set currentUser as that user (keeps automatic login)
+        localStorage.setItem('currentUser', rememberUser);
+        // create fresh shuffledQuestions for this (auto) login
+        createShuffledQuestionsForSession();
+        showDashboardFor(rememberUser);
+      } else if (currentUser) {
+        // if there is a currentUser but no remember flag, still create shuffledQuestions on page load
+        createShuffledQuestionsForSession();
+        showDashboardFor(currentUser);
+      } else {
+        registerPage.classList.remove('hidden');
+        loginPage.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
